@@ -1,0 +1,3238 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KRT 会計システム</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Zen+Kaku+Gothic+New:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<style>
+/* ============================================
+   CSS変数（デザインの設定値を一か所にまとめる）
+   ここを変えるだけでアプリ全体の色が変わる
+   ============================================ */
+:root {
+  --bg:        #0d0f14;
+  --surface:   #141720;
+  --surface2:  #1c2030;
+  --surface3:  #242840;
+  --border:    #2a2e45;
+
+  --accent:    #4f9cf9;   /* メインカラー（青） */
+  --accent-g:  #34d399;   /* 緑（部費・成功） */
+  --accent-r:  #f87171;   /* 赤（危険・未返金） */
+  --accent-y:  #fbbf24;   /* 黄（警告） */
+
+  --text:      #e2e8f8;
+  --text2:     #8892b0;
+  --text3:     #4a5280;
+
+  --sidebar-w: 240px;
+  --radius:    10px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  background-image: radial-gradient(var(--border) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+/* ============================================
+   サイドバー
+   ============================================ */
+.sidebar {
+  width: var(--sidebar-w);
+  min-height: 100vh;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  display: flex;
+  flex-direction: column;
+  animation: slideInLeft 0.4s ease;
+}
+
+@keyframes slideInLeft {
+  from { transform: translateX(-20px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+.logo {
+  padding: 28px 24px 24px;
+  border-bottom: 1px solid var(--border);
+}
+.logo-main {
+  font-family: 'DM Mono', monospace;
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 2px;
+}
+.logo-sub {
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+
+.nav {
+  flex: 1;
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+/* セクション見出し（Main / Input / Manage / Balance / Settings） */
+.nav-section {
+  padding: 16px 20px 6px;
+  font-size: 9px;
+  letter-spacing: 2.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+  font-family: 'DM Mono', monospace;
+}
+/* 最初のセクションは上余白を小さく */
+.nav-section:first-child { padding-top: 8px; }
+
+/* 各ナビ項目 */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 20px;
+  cursor: pointer;
+  color: var(--text2);
+  font-size: 13.5px;
+  transition: all 0.15s ease;
+  border-left: 3px solid transparent;
+}
+.nav-item:hover {
+  color: var(--text);
+  background: var(--surface2);
+  border-left-color: var(--border);
+}
+.nav-item.active {
+  color: var(--accent);
+  background: rgba(79, 156, 249, 0.08);
+  border-left-color: var(--accent);
+}
+.nav-icon { font-size: 15px; width: 18px; text-align: center; flex-shrink: 0; }
+
+/* バッジ（未処理件数） */
+.nav-badge {
+  margin-left: auto;
+  background: var(--accent-r);
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'DM Mono', monospace;
+  padding: 2px 7px;
+  border-radius: 20px;
+  min-width: 20px;
+  text-align: center;
+  display: none;
+}
+.nav-badge.visible { display: inline-block; }
+
+.sidebar-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+}
+.sidebar-footer .version { margin-top: 2px; font-size: 10px; }
+
+/* ============================================
+   メインコンテンツ
+   ============================================ */
+.main {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ============================================
+   ページ
+   ============================================ */
+.page {
+  display: none;
+  padding: 36px 40px;
+  flex: 1;
+  animation: fadeUp 0.25s ease;
+}
+.page.active { display: block; }
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 36px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+.page-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 26px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: -0.5px;
+}
+.page-title-tag {
+  display: inline-block;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: rgba(79, 156, 249, 0.1);
+  border: 1px solid rgba(79, 156, 249, 0.3);
+  border-radius: 4px;
+  padding: 3px 8px;
+  margin-left: 10px;
+  vertical-align: middle;
+  font-family: 'DM Mono', monospace;
+}
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text3);
+  margin-top: 6px;
+}
+
+/* ============================================
+   プレースホルダー（Step 2以降で本物に差し替える）
+   ============================================ */
+.placeholder {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 60px 40px;
+  text-align: center;
+  color: var(--text3);
+}
+.placeholder-icon  { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.placeholder-title { font-family: 'DM Mono', monospace; font-size: 14px; color: var(--text2); margin-bottom: 8px; }
+.placeholder-desc  { font-size: 12px; line-height: 1.7; max-width: 400px; margin: 0 auto; }
+
+/* ============================================
+   ユーティリティ
+   ============================================ */
+.flex         { display: flex; }
+.items-center { align-items: center; }
+.gap-2        { gap: 8px; }
+.gap-3        { gap: 12px; }
+.ml-auto      { margin-left: auto; }
+
+::-webkit-scrollbar       { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* ============================================
+   Step 2 で追加したスタイル
+   ============================================ */
+
+/* ---- カード（白い枠のコンテナ） ---- */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px 32px;
+}
+.card-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.card-desc {
+  font-size: 13px;
+  color: var(--text2);
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+
+/* ---- テキスト入力 ---- */
+.text-input {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.text-input:focus {
+  border-color: var(--accent);
+  background: var(--surface3);
+}
+
+/* ---- ボタン ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  cursor: pointer;
+  border: none;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover {
+  background: #3b88e8;
+  transform: translateY(-1px);
+}
+.btn-ghost {
+  background: transparent;
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+.btn-ghost:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+.btn-danger {
+  background: transparent;
+  color: var(--accent-r);
+  border: 1px solid transparent;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.btn-danger:hover {
+  background: rgba(248, 113, 113, 0.1);
+  border-color: var(--accent-r);
+}
+
+/* ---- メンバー追加行 ---- */
+.member-add-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.member-add-row .text-input {
+  flex: 1;
+  width: auto;
+}
+
+/* ---- メンバー一覧 ---- */
+.member-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* メンバータグ（名前 × ボタン） */
+.member-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 6px 8px 6px 14px;
+  font-size: 13px;
+  color: var(--text);
+  transition: border-color 0.15s;
+}
+.member-tag:hover {
+  border-color: var(--accent);
+}
+.member-tag-name {
+  /* 名前部分 */
+}
+.member-tag-remove {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 50%;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+}
+.member-tag-remove:hover {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--accent-r);
+}
+
+/* ---- トースト通知（保存完了などの一時メッセージ） ---- */
+.toast {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 20px;
+  font-size: 13px;
+  color: var(--text);
+  z-index: 9999;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  /* 最初は画面外に隠す */
+  transform: translateY(20px);
+  opacity: 0;
+  transition: all 0.25s ease;
+  pointer-events: none;
+}
+.toast.show {
+  transform: translateY(0);
+  opacity: 1;
+}
+.toast.success { border-left-color: var(--accent-g); }
+.toast.error   { border-left-color: var(--accent-r); }
+
+
+/* ============================================
+   Step 3 で追加したスタイル
+   ============================================ */
+
+/* ---- タブ切り替え ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.tab-btn {
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  color: var(--text3);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.tab-btn:hover { color: var(--text2); }
+.tab-btn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.tab-btn.active.green {
+  color: var(--accent-g);
+  border-bottom-color: var(--accent-g);
+}
+
+/* ---- フォームグリッド ---- */
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
+.form-full   { grid-column: 1 / -1; } /* 横幅いっぱい */
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.form-label {
+  font-size: 11px;
+  color: var(--text2);
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+.form-label .required {
+  color: var(--accent-r);
+  margin-left: 3px;
+}
+.form-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+  cursor: pointer;
+}
+.form-select:focus { border-color: var(--accent); background: var(--surface3); }
+.form-select option { background: var(--surface2); }
+
+.form-textarea {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  outline: none;
+  transition: border-color 0.15s;
+  resize: vertical;
+  min-height: 72px;
+}
+.form-textarea:focus { border-color: var(--accent); background: var(--surface3); }
+
+/* ---- フォームアクション行 ---- */
+.form-actions {
+  display: flex;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+/* ---- 台帳テーブル ---- */
+.ledger-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.ledger-count {
+  font-size: 12px;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+}
+
+/* 月フィルター */
+.month-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.month-btn {
+  padding: 5px 12px;
+  font-size: 11px;
+  font-family: 'DM Mono', monospace;
+  color: var(--text3);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.month-btn:hover { color: var(--text); border-color: var(--text3); }
+.month-btn.active {
+  color: var(--accent);
+  background: rgba(79,156,249,0.1);
+  border-color: var(--accent);
+}
+.month-btn.active.green {
+  color: var(--accent-g);
+  background: rgba(52,211,153,0.1);
+  border-color: var(--accent-g);
+}
+
+/* テーブル */
+.table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+thead { background: var(--surface2); }
+th {
+  padding: 11px 16px;
+  text-align: left;
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-weight: 500;
+  font-family: 'DM Mono', monospace;
+  white-space: nowrap;
+}
+td {
+  padding: 11px 16px;
+  border-top: 1px solid var(--border);
+  color: var(--text2);
+  vertical-align: middle;
+}
+tr:hover td { background: var(--surface2); color: var(--text); }
+.td-mono   { font-family: 'DM Mono', monospace; }
+.td-amount { font-family: 'DM Mono', monospace; font-weight: 500; color: var(--text); }
+.td-url a  { color: var(--accent); font-size: 11px; }
+
+/* 空状態 */
+.table-empty {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text3);
+  font-size: 13px;
+}
+
+/* ============================================
+   Step 4 で追加したスタイル
+   ============================================ */
+
+/* ---- 2ペインレイアウト（預金残高ページ用） ----
+   左：一覧リスト　右：選択行の詳細
+   ============================================ */
+.two-pane {
+  display: grid;
+  grid-template-columns: 1fr 380px; /* 左が伸縮、右は固定幅 */
+  gap: 20px;
+  align-items: start;
+}
+
+/* 右ペイン：選択した行の詳細を常時表示 */
+.detail-pane {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: sticky;  /* スクロールしても右ペインは固定 */
+  top: 24px;
+}
+.detail-pane-empty {
+  text-align: center;
+  color: var(--text3);
+  padding: 40px 0;
+  font-size: 13px;
+}
+.detail-pane-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--text3);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+  gap: 12px;
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label { color: var(--text3); font-size: 11px; flex-shrink: 0; }
+.detail-value { color: var(--text); font-weight: 500; text-align: right; word-break: break-all; }
+.detail-note {
+  margin-top: 16px;
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 12px;
+  color: var(--text2);
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+/* テーブル行の選択状態 */
+tr.selected td {
+  background: rgba(79, 156, 249, 0.08) !important;
+  color: var(--text) !important;
+}
+tr.selected-green td {
+  background: rgba(52, 211, 153, 0.08) !important;
+  color: var(--text) !important;
+}
+
+/* ---- 個人別返金カード ---- */
+.refund-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+.refund-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  transition: border-color 0.15s;
+}
+.refund-card:hover { border-color: var(--accent); }
+
+.refund-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.refund-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+}
+.refund-name {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text);
+}
+.refund-total {
+  margin-left: auto;
+  font-family: 'DM Mono', monospace;
+  font-size: 16px;
+  font-weight: 500;
+}
+.refund-total.has-debt  { color: var(--accent-r); }
+.refund-total.no-debt   { color: var(--accent-g); }
+
+.refund-stat {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+  color: var(--text2);
+}
+.refund-stat-label { color: var(--text3); }
+
+/* 返金入力行 */
+.refund-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+  align-items: center;
+}
+.refund-input-row .text-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+.btn-sm {
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+/* ---- 預金残高入力フォーム ---- */
+.balance-form {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+.balance-form-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  margin-bottom: 14px;
+}
+.balance-form-row {
+  display: grid;
+  grid-template-columns: 140px 1fr 1fr 1fr 1fr auto;
+  gap: 10px;
+  align-items: end;
+}
+
+/* ---- 残高サマリ ---- */
+.balance-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.summary-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+}
+.summary-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  margin-bottom: 8px;
+}
+.summary-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 22px;
+  font-weight: 500;
+}
+.summary-value.income  { color: var(--accent-g); }
+.summary-value.expense { color: var(--accent-r); }
+.summary-value.balance { color: var(--accent);   }
+
+/* ============================================
+   Step 5 で追加したスタイル
+   ============================================ */
+
+/* ---- サマリカード グリッド ---- */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 28px;
+}
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--accent); }
+
+/* 下部のカラーライン */
+.stat-card::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 2px;
+}
+.stat-card.blue::after   { background: var(--accent); }
+.stat-card.green::after  { background: var(--accent-g); }
+.stat-card.red::after    { background: var(--accent-r); }
+.stat-card.yellow::after { background: var(--accent-y); }
+
+.stat-label {
+  font-size: 10px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: 'DM Mono', monospace;
+  margin-bottom: 10px;
+}
+.stat-value {
+  font-family: 'DM Mono', monospace;
+  font-size: 24px;
+  font-weight: 500;
+  letter-spacing: -0.5px;
+}
+.stat-value.blue   { color: var(--accent);   }
+.stat-value.green  { color: var(--accent-g); }
+.stat-value.red    { color: var(--accent-r); }
+.stat-value.yellow { color: var(--accent-y); }
+.stat-meta {
+  font-size: 11px;
+  color: var(--text3);
+  margin-top: 5px;
+}
+
+/* ---- ダッシュボード下段 2カラム ---- */
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+/* ---- ランキングリスト ---- */
+.ranking-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.ranking-item:last-child { border-bottom: none; }
+.ranking-num {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  width: 20px;
+  text-align: center;
+  color: var(--text3);
+  flex-shrink: 0;
+}
+.ranking-num.top { color: var(--accent-y); }
+.ranking-name { font-size: 13px; color: var(--text); flex: 1; }
+.ranking-bar-wrap {
+  flex: 2;
+  background: var(--surface3);
+  border-radius: 3px;
+  height: 5px;
+  overflow: hidden;
+}
+.ranking-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.5s ease;
+}
+.ranking-amount {
+  font-family: 'DM Mono', monospace;
+  font-size: 12px;
+  color: var(--accent-r);
+  width: 90px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Step 6 で追加したスタイル
+   ============================================ */
+
+/* ---- 振り分けページの2ペイン ---- */
+.triage-layout {
+  display: grid;
+  grid-template-columns: 1fr 420px;
+  gap: 20px;
+  align-items: start;
+}
+
+/* ---- 未処理アイテムカード ---- */
+.triage-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: 8px;
+}
+.triage-item:hover   { border-color: var(--accent); background: var(--surface2); }
+.triage-item.active  { border-color: var(--accent); background: rgba(79,156,249,0.06); }
+
+.triage-item-date   { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--text3); flex-shrink: 0; width: 70px; }
+.triage-item-name   { font-size: 13px; font-weight: 500; color: var(--text); flex-shrink: 0; width: 80px; }
+.triage-item-item   { font-size: 13px; color: var(--text2); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.triage-item-amount { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 500; color: var(--text); flex-shrink: 0; }
+
+/* ---- 振り分け右ペイン ---- */
+.triage-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  position: sticky;
+  top: 24px;
+}
+.triage-detail-empty {
+  padding: 60px 24px;
+  text-align: center;
+  color: var(--text3);
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+/* 領収書プレビューエリア */
+.receipt-preview {
+  width: 100%;
+  height: 260px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.receipt-preview iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+.receipt-no-url {
+  color: var(--text3);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 振り分け詳細情報 */
+.triage-info {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* 振り分けボタンエリア */
+.triage-actions {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.btn-expense {
+  background: rgba(79,156,249,0.15);
+  color: var(--accent);
+  border: 1px solid rgba(79,156,249,0.4);
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: center;
+}
+.btn-expense:hover { background: rgba(79,156,249,0.25); }
+.btn-club {
+  background: rgba(52,211,153,0.15);
+  color: var(--accent-g);
+  border: 1px solid rgba(52,211,153,0.4);
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: center;
+}
+.btn-club:hover { background: rgba(52,211,153,0.25); }
+
+/* ---- ステータスバッジ ---- */
+.status-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  flex-shrink: 0;
+}
+.status-dot.pending  { background: var(--accent-y); }
+.status-dot.done     { background: var(--accent-g); }
+
+/* ---- GAS接続状態表示 ---- */
+.gas-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+}
+.gas-status.connected    { border-color: rgba(52,211,153,0.4); color: var(--accent-g); }
+.gas-status.disconnected { border-color: var(--border); color: var(--text3); }
+
+/* ============================================
+   Step 7 で追加したスタイル
+   ============================================ */
+
+/* ---- メモ帳 ---- */
+.notes-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 20px;
+  align-items: start;
+}
+.notes-sidebar {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.notes-sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--text2);
+}
+.note-list-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.note-list-item:hover  { background: var(--surface2); }
+.note-list-item.active { background: rgba(79,156,249,0.08); border-left: 2px solid var(--accent); }
+.note-list-item:last-child { border-bottom: none; }
+.note-list-title { font-size: 13px; color: var(--text); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.note-list-date  { font-size: 10px; color: var(--text3); font-family: 'DM Mono', monospace; }
+
+.notes-editor {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.notes-editor-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.note-title-input {
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 500;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  flex: 1;
+  outline: none;
+}
+.note-title-input::placeholder { color: var(--text3); }
+.note-body-input {
+  width: 100%;
+  min-height: 400px;
+  background: transparent;
+  border: none;
+  color: var(--text2);
+  font-size: 13px;
+  font-family: 'Zen Kaku Gothic New', sans-serif;
+  line-height: 1.8;
+  padding: 20px;
+  outline: none;
+  resize: none;
+}
+.note-body-input::placeholder { color: var(--text3); }
+
+/* ---- 設定ページ ---- */
+.settings-section {
+  margin-bottom: 20px;
+}
+.code-block {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-g);
+  line-height: 1.8;
+  overflow-x: auto;
+  white-space: pre;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.connection-status {
+  margin-top: 10px;
+  font-size: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  display: none;
+}
+.connection-status.ok    { background: rgba(52,211,153,0.1); color: var(--accent-g); display: block; }
+.connection-status.error { background: rgba(248,113,113,0.1); color: var(--accent-r); display: block; }
+
+/* ---- GASコードのステップ説明 ---- */
+.setup-step {
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border);
+}
+.setup-step:last-child { border-bottom: none; }
+.setup-num {
+  width: 26px; height: 26px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  flex-shrink: 0; margin-top: 2px;
+  font-family: 'DM Mono', monospace;
+}
+.setup-content h4 { font-size: 13px; font-weight: 500; color: var(--text); margin-bottom: 4px; }
+.setup-content p  { font-size: 12px; color: var(--text2); line-height: 1.7; }
+.setup-content code {
+  background: var(--surface3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--accent-y);
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================
+     サイドバー
+     ============================================ -->
+<aside class="sidebar">
+
+  <div class="logo">
+    <div class="logo-main">KRT</div>
+    <div class="logo-sub">Accounting System</div>
+  </div>
+
+  <nav class="nav">
+
+    <!-- Main -->
+    <div class="nav-section">Main</div>
+    <div class="nav-item active" data-page="dashboard">
+      <span class="nav-icon">▦</span>ダッシュボード
+    </div>
+
+    <!-- Input -->
+    <div class="nav-section">Input</div>
+    <div class="nav-item" data-page="triage">
+      <span class="nav-icon">⬡</span>振り分け
+      <span class="nav-badge" id="badge-triage">0</span>
+    </div>
+    <div class="nav-item" data-page="entry">
+      <span class="nav-icon">＋</span>手動入力
+    </div>
+
+    <!-- Manage -->
+    <div class="nav-section">Manage</div>
+    <div class="nav-item" data-page="expense-ledger">
+      <span class="nav-icon">◈</span>経費台帳
+    </div>
+    <div class="nav-item" data-page="club-ledger">
+      <span class="nav-icon">◈</span>部費台帳
+    </div>
+    <div class="nav-item" data-page="refund">
+      <span class="nav-icon">◷</span>個人別返金
+      <span class="nav-badge" id="badge-refund">0</span>
+    </div>
+
+    <!-- Balance -->
+    <div class="nav-section">Balance</div>
+    <div class="nav-item" data-page="balance">
+      <span class="nav-icon">⬡</span>預金残高
+    </div>
+
+    <!-- Note -->
+    <div class="nav-section">Note</div>
+    <div class="nav-item" data-page="notes">
+      <span class="nav-icon">📝</span>メモ帳
+    </div>
+
+    <!-- Settings -->
+    <div class="nav-section">Settings</div>
+    <div class="nav-item" data-page="settings">
+      <span class="nav-icon">⚙</span>連携設定
+    </div>
+
+  </nav>
+
+  <div class="sidebar-footer">
+    <div>2026年度</div>
+    <div class="version">Step 7 / 7 ✓</div>
+  </div>
+
+</aside>
+
+<!-- ============================================
+     メインコンテンツ
+     ============================================ -->
+<main class="main">
+
+  <!-- ページ 1：ダッシュボード -->
+  <section class="page active" id="page-dashboard">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Dashboard <span class="page-title-tag">概要</span></div>
+        <div class="page-subtitle">残高・返金状況・立替ランキングをひと目で確認</div>
+      </div>
+      <button class="btn btn-ghost" onclick="renderDashboard()" style="font-size:12px">↺ 更新</button>
+    </div>
+
+    <!-- 上段：4つのサマリカード -->
+    <div class="stat-grid">
+      <div class="stat-card blue">
+        <div class="stat-label">経費 取引数</div>
+        <div class="stat-value blue" id="dash-exp-count">-</div>
+        <div class="stat-meta" id="dash-exp-total">合計 ¥-</div>
+      </div>
+      <div class="stat-card green">
+        <div class="stat-label">部費 取引数</div>
+        <div class="stat-value green" id="dash-club-count">-</div>
+        <div class="stat-meta" id="dash-club-total">合計 ¥-</div>
+      </div>
+      <div class="stat-card red">
+        <div class="stat-label">未返金 総額</div>
+        <div class="stat-value red" id="dash-debt-total">¥-</div>
+        <div class="stat-meta" id="dash-debt-persons">- 人</div>
+      </div>
+      <div class="stat-card yellow">
+        <div class="stat-label">預金残高</div>
+        <div class="stat-value yellow" id="dash-balance">¥-</div>
+        <div class="stat-meta" id="dash-balance-meta">出納帳より</div>
+      </div>
+    </div>
+
+    <!-- 下段：最近の取引 ＋ ランキング -->
+    <div class="dash-grid">
+
+      <!-- 左：最近の取引 -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">最近の取引</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>品目</th>
+                <th>担当者</th>
+                <th>種別</th>
+                <th>金額</th>
+              </tr>
+            </thead>
+            <tbody id="dash-recent-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 右：立替残高ランキング -->
+      <div class="card">
+        <div class="card-title" style="margin-bottom:16px">立替残高 ランキング</div>
+        <div id="dash-ranking"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ページ 2：振り分け -->
+  <section class="page" id="page-triage">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Triage <span class="page-title-tag">振り分け</span></div>
+        <div class="page-subtitle">フォーム回答を確認し、経費 or 部費に振り分けて転記する</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <div id="gas-status-badge" class="gas-status disconnected">
+          ⚪ GAS未接続
+        </div>
+        <button class="btn btn-primary" onclick="fetchFromGAS()">↓ フォームデータ取得</button>
+      </div>
+    </div>
+
+    <!-- GAS未設定の案内 -->
+    <div id="triage-gas-notice" class="card" style="margin-bottom:20px;border-color:rgba(251,191,36,0.3);display:none">
+      <div class="card-title">⚙️ GAS URLが設定されていません</div>
+      <p class="card-desc" style="margin-bottom:12px">
+        連携設定ページでGAS WebアプリURLを入力すると、Googleフォームの回答を自動取得できます。<br>
+        設定なしでも手動でデータを追加して振り分けることができます。
+      </p>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="showPage('settings')">⚙ 連携設定へ</button>
+        <button class="btn btn-ghost"   onclick="addSampleFormData()">サンプルデータを追加</button>
+      </div>
+    </div>
+
+    <div class="triage-layout">
+
+      <!-- 左：未処理リスト -->
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:12px;color:var(--text3)" id="triage-count-label">未処理 0件</div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost" style="font-size:11px;padding:5px 12px" onclick="toggleShowDone()">
+              <span id="toggle-done-label">済みを表示</span>
+            </button>
+          </div>
+        </div>
+        <div id="triage-list">
+          <!-- JavaScript で描画 -->
+        </div>
+      </div>
+
+      <!-- 右：詳細＋領収書プレビュー＋振り分けボタン -->
+      <div class="triage-detail" id="triage-detail-pane">
+        <div class="triage-detail-empty">
+          ← アイテムを選択すると<br>領収書と詳細が表示されます
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ページ 3：手動入力 -->
+  <section class="page" id="page-entry">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Manual Entry <span class="page-title-tag">手動入力</span></div>
+        <div class="page-subtitle">フォームを使わない経費・部費を直接入力する</div>
+      </div>
+    </div>
+
+    <!-- タブ切り替え -->
+    <div class="tabs">
+      <button class="tab-btn active"       onclick="switchEntryTab('expense', this)">💜 経費</button>
+      <button class="tab-btn       green"  onclick="switchEntryTab('club',    this)">💚 部費</button>
+    </div>
+
+    <!-- 経費入力フォーム -->
+    <div id="entry-expense">
+      <div class="card">
+        <div class="card-title">経費 入力</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">記入日 <span class="required">*</span></label>
+            <input type="date" id="exp-date" class="text-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">領収書日付</label>
+            <input type="date" id="exp-receipt-date" class="text-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">品目・概要 <span class="required">*</span></label>
+            <input type="text" id="exp-item" class="text-input" placeholder="例：モノタロウ スプロケット">
+          </div>
+          <div class="form-group">
+            <label class="form-label">購入会社</label>
+            <input type="text" id="exp-company" class="text-input" placeholder="例：モノタロウ">
+          </div>
+          <div class="form-group">
+            <label class="form-label">用途</label>
+            <input type="text" id="exp-purpose" class="text-input" placeholder="例：エンジン部品交換">
+          </div>
+          <div class="form-group">
+            <label class="form-label">担当者 <span class="required">*</span></label>
+            <select id="exp-person" class="form-select">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">金額（円） <span class="required">*</span></label>
+            <input type="number" id="exp-amount" class="text-input" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">領収書URL（Google Drive）</label>
+            <input type="url" id="exp-url" class="text-input" placeholder="https://drive.google.com/...">
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">備考</label>
+            <textarea id="exp-note" class="form-textarea" placeholder="メモがあれば..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="saveEntry('expense')">✓ 保存する</button>
+          <button class="btn btn-ghost"   onclick="clearEntryForm('expense')">クリア</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 部費入力フォーム（初期は非表示） -->
+    <div id="entry-club" style="display:none">
+      <div class="card">
+        <div class="card-title">部費 入力</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">記入日 <span class="required">*</span></label>
+            <input type="date" id="club-date" class="text-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">領収書日付</label>
+            <input type="date" id="club-receipt-date" class="text-input">
+          </div>
+          <div class="form-group">
+            <label class="form-label">品目・概要 <span class="required">*</span></label>
+            <input type="text" id="club-item" class="text-input" placeholder="例：部費回収 4月分">
+          </div>
+          <div class="form-group">
+            <label class="form-label">購入会社</label>
+            <input type="text" id="club-company" class="text-input" placeholder="例：ケーヨーデイツー">
+          </div>
+          <div class="form-group">
+            <label class="form-label">用途</label>
+            <input type="text" id="club-purpose" class="text-input" placeholder="例：大会現地費用">
+          </div>
+          <div class="form-group">
+            <label class="form-label">担当者 <span class="required">*</span></label>
+            <select id="club-person" class="form-select">
+              <option value="">選択してください</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">金額（円） <span class="required">*</span></label>
+            <input type="number" id="club-amount" class="text-input" placeholder="0" min="0">
+          </div>
+          <div class="form-group">
+            <label class="form-label">入金 / 出金</label>
+            <select id="club-direction" class="form-select">
+              <option value="expense">出金（立替）</option>
+              <option value="income">入金（部費回収など）</option>
+            </select>
+          </div>
+          <div class="form-group form-full">
+            <label class="form-label">備考</label>
+            <textarea id="club-note" class="form-textarea" placeholder="メモがあれば..."></textarea>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" style="background:var(--accent-g)" onclick="saveEntry('club')">✓ 保存する</button>
+          <button class="btn btn-ghost" onclick="clearEntryForm('club')">クリア</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ページ 4：経費台帳 -->
+  <section class="page" id="page-expense-ledger">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Expense Ledger <span class="page-title-tag">経費台帳</span></div>
+        <div class="page-subtitle">月別フィルター付き年間経費一覧</div>
+      </div>
+      <button class="btn btn-primary" onclick="showPage('entry')">＋ 新規入力</button>
+    </div>
+
+    <!-- 月フィルター -->
+    <div class="month-filter" id="exp-month-filter">
+      <button class="month-btn active" data-month="all" onclick="filterLedger('expense','all',this)">すべて</button>
+      <button class="month-btn" data-month="4"  onclick="filterLedger('expense','4',this)">4月</button>
+      <button class="month-btn" data-month="5"  onclick="filterLedger('expense','5',this)">5月</button>
+      <button class="month-btn" data-month="6"  onclick="filterLedger('expense','6',this)">6月</button>
+      <button class="month-btn" data-month="7"  onclick="filterLedger('expense','7',this)">7月</button>
+      <button class="month-btn" data-month="8"  onclick="filterLedger('expense','8',this)">8月</button>
+      <button class="month-btn" data-month="9"  onclick="filterLedger('expense','9',this)">9月</button>
+      <button class="month-btn" data-month="10" onclick="filterLedger('expense','10',this)">10月</button>
+      <button class="month-btn" data-month="11" onclick="filterLedger('expense','11',this)">11月</button>
+      <button class="month-btn" data-month="12" onclick="filterLedger('expense','12',this)">12月</button>
+      <button class="month-btn" data-month="1"  onclick="filterLedger('expense','1',this)">1月</button>
+      <button class="month-btn" data-month="2"  onclick="filterLedger('expense','2',this)">2月</button>
+      <button class="month-btn" data-month="3"  onclick="filterLedger('expense','3',this)">3月</button>
+    </div>
+
+    <div class="ledger-header">
+      <span class="ledger-count" id="exp-ledger-count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>受付番号</th>
+            <th>記入日</th>
+            <th>品目・概要</th>
+            <th>購入会社</th>
+            <th>用途</th>
+            <th>担当者</th>
+            <th>金額</th>
+            <th>領収書</th>
+          </tr>
+        </thead>
+        <tbody id="exp-ledger-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ページ 5：部費台帳 -->
+  <section class="page" id="page-club-ledger">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Club Ledger <span class="page-title-tag">部費台帳</span></div>
+        <div class="page-subtitle">月別フィルター付き年間部費一覧</div>
+      </div>
+      <button class="btn btn-primary" style="background:var(--accent-g)" onclick="showPage('entry'); switchEntryTab('club', document.querySelector('.tab-btn.green'))">＋ 新規入力</button>
+    </div>
+
+    <!-- 月フィルター -->
+    <div class="month-filter" id="club-month-filter">
+      <button class="month-btn active green" data-month="all" onclick="filterLedger('club','all',this)">すべて</button>
+      <button class="month-btn green" data-month="4"  onclick="filterLedger('club','4',this)">4月</button>
+      <button class="month-btn green" data-month="5"  onclick="filterLedger('club','5',this)">5月</button>
+      <button class="month-btn green" data-month="6"  onclick="filterLedger('club','6',this)">6月</button>
+      <button class="month-btn green" data-month="7"  onclick="filterLedger('club','7',this)">7月</button>
+      <button class="month-btn green" data-month="8"  onclick="filterLedger('club','8',this)">8月</button>
+      <button class="month-btn green" data-month="9"  onclick="filterLedger('club','9',this)">9月</button>
+      <button class="month-btn green" data-month="10" onclick="filterLedger('club','10',this)">10月</button>
+      <button class="month-btn green" data-month="11" onclick="filterLedger('club','11',this)">11月</button>
+      <button class="month-btn green" data-month="12" onclick="filterLedger('club','12',this)">12月</button>
+      <button class="month-btn green" data-month="1"  onclick="filterLedger('club','1',this)">1月</button>
+      <button class="month-btn green" data-month="2"  onclick="filterLedger('club','2',this)">2月</button>
+      <button class="month-btn green" data-month="3"  onclick="filterLedger('club','3',this)">3月</button>
+    </div>
+
+    <div class="ledger-header">
+      <span class="ledger-count" id="club-ledger-count"></span>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>受付番号</th>
+            <th>記入日</th>
+            <th>品目・概要</th>
+            <th>購入会社</th>
+            <th>用途</th>
+            <th>担当者</th>
+            <th>種別</th>
+            <th>金額</th>
+          </tr>
+        </thead>
+        <tbody id="club-ledger-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ページ 6：個人別返金 -->
+  <section class="page" id="page-refund">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Refund <span class="page-title-tag">個人別返金</span></div>
+        <div class="page-subtitle">メンバーごとの立替残高・返金状況を人単位で管理</div>
+      </div>
+    </div>
+
+    <!-- メンバーカード一覧 -->
+    <div id="refund-grid" class="refund-grid">
+      <!-- JavaScript で描画 -->
+    </div>
+  </section>
+
+  <!-- ページ 7：預金残高 -->
+  <section class="page" id="page-balance">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Balance <span class="page-title-tag">預金残高</span></div>
+        <div class="page-subtitle">入出金の出納帳。行をクリックすると右側に詳細を表示</div>
+      </div>
+    </div>
+
+    <!-- 残高サマリ -->
+    <div class="balance-summary">
+      <div class="summary-card">
+        <div class="summary-label">総入金</div>
+        <div class="summary-value income" id="bal-total-income">¥0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">総出金</div>
+        <div class="summary-value expense" id="bal-total-expense">¥0</div>
+      </div>
+      <div class="summary-card">
+        <div class="summary-label">現在残高</div>
+        <div class="summary-value balance" id="bal-current">¥0</div>
+      </div>
+    </div>
+
+    <!-- 入力フォーム -->
+    <div class="balance-form">
+      <div class="balance-form-title">＋ 新規追加</div>
+      <div class="balance-form-row">
+        <div class="form-group">
+          <label class="form-label">日付 <span class="required">*</span></label>
+          <input type="date" id="bal-date" class="text-input">
+        </div>
+        <div class="form-group">
+          <label class="form-label">摘要 <span class="required">*</span></label>
+          <input type="text" id="bal-label" class="text-input" placeholder="例：部費回収 4月分">
+        </div>
+        <div class="form-group">
+          <label class="form-label">入金額</label>
+          <input type="number" id="bal-income" class="text-input" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">出金額</label>
+          <input type="number" id="bal-expense" class="text-input" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">担当者</label>
+          <select id="bal-person" class="form-select">
+            <option value="">選択してください</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">&nbsp;</label>
+          <button class="btn btn-primary" onclick="saveBalance()">追加</button>
+        </div>
+      </div>
+      <!-- 備考（詳細ペインに表示される内容） -->
+      <div class="form-group" style="margin-top:10px">
+        <label class="form-label">詳細メモ（右ペインに表示）</label>
+        <textarea id="bal-note" class="form-textarea" placeholder="詳細や補足を入力..."></textarea>
+      </div>
+    </div>
+
+    <!-- 2ペインレイアウト -->
+    <div class="two-pane">
+
+      <!-- 左ペイン：一覧テーブル -->
+      <div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>日付</th>
+                <th>摘要</th>
+                <th>入金</th>
+                <th>出金</th>
+                <th>残高</th>
+                <th>担当者</th>
+              </tr>
+            </thead>
+            <tbody id="balance-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 右ペイン：選択行の詳細 -->
+      <div class="detail-pane" id="balance-detail-pane">
+        <div class="detail-pane-empty">
+          ← 行をクリックすると<br>詳細がここに表示されます
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ページ 8：メモ帳 -->
+  <section class="page" id="page-notes">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Notes <span class="page-title-tag">メモ帳</span></div>
+        <div class="page-subtitle">会計会議の記録・部費徴収予定・追加徴収メモなど自由に書き留める</div>
+      </div>
+      <button class="btn btn-primary" onclick="createNote()">＋ 新規メモ</button>
+    </div>
+
+    <div class="notes-layout">
+      <!-- 左：メモ一覧 -->
+      <div class="notes-sidebar">
+        <div class="notes-sidebar-header">
+          <span>メモ一覧</span>
+          <span id="notes-count" style="font-family:'DM Mono',monospace">0件</span>
+        </div>
+        <div id="note-list">
+          <div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">
+            「＋ 新規メモ」で作成
+          </div>
+        </div>
+      </div>
+
+      <!-- 右：エディタ -->
+      <div class="notes-editor" id="note-editor">
+        <div style="padding:60px;text-align:center;color:var(--text3);font-size:13px">
+          左のメモを選択するか、新規メモを作成してください
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ページ 9：連携設定 -->
+  <section class="page" id="page-settings">
+    <div class="page-header">
+      <div>
+        <div class="page-title">Settings <span class="page-title-tag">連携設定</span></div>
+        <div class="page-subtitle">メンバー管理・Googleスプレッドシート連携の設定</div>
+      </div>
+    </div>
+
+    <!-- ---- メンバー管理 ---- -->
+    <div class="card settings-section">
+      <div class="card-title">👥 メンバー管理</div>
+      <p class="card-desc">ここで登録したメンバーが、入力フォームや個人別返金の担当者リストに反映されます。</p>
+      <div class="member-add-row">
+        <input type="text" id="input-member-name" class="text-input" placeholder="名前を入力（例：阪本豊）" maxlength="20">
+        <button class="btn btn-primary" onclick="addMember()">追加</button>
+      </div>
+      <div id="member-list" class="member-list"></div>
+    </div>
+
+    <!-- ---- GAS接続設定 ---- -->
+    <div class="card settings-section">
+      <div class="card-title">🔗 Googleスプレッドシート連携</div>
+      <p class="card-desc">
+        GAS（Google Apps Script）のWebアプリURLを入力してスプレッドシートと連携します。
+        設定後、振り分けページでフォーム回答を自動取得できます。
+      </p>
+      <div class="form-grid" style="max-width:600px;margin-bottom:14px">
+        <div class="form-group">
+          <label class="form-label">GAS WebアプリURL <span class="required">*</span></label>
+          <input type="text" id="gas-url-input" class="text-input" placeholder="https://script.google.com/macros/s/.../exec">
+        </div>
+        <div class="form-group">
+          <label class="form-label">スプレッドシートID（確認用・任意）</label>
+          <input type="text" id="sheet-id-input" class="text-input" placeholder="URLの /d/ 以降の英数字">
+        </div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="saveGasSettings()">保存する</button>
+        <button class="btn btn-ghost"   onclick="testGasConnection()">🔌 接続テスト</button>
+      </div>
+      <div id="connection-status" class="connection-status"></div>
+    </div>
+
+    <!-- ---- GASコードのセットアップ手順 ---- -->
+    <div class="card settings-section">
+      <div class="card-title">📋 GASのセットアップ手順</div>
+
+      <div class="setup-step">
+        <div class="setup-num">1</div>
+        <div class="setup-content">
+          <h4>Googleスプレッドシートを開く</h4>
+          <p>既存の帳簿スプレッドシートを開きます。<br>
+          上部メニューの <code>拡張機能</code> → <code>Apps Script</code> をクリック。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="setup-num">2</div>
+        <div class="setup-content">
+          <h4>下のコードを貼り付ける</h4>
+          <p>Apps Scriptのエディタに貼り付けて保存（Ctrl+S）してください。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="setup-num">3</div>
+        <div class="setup-content">
+          <h4>ウェブアプリとしてデプロイする</h4>
+          <p><code>デプロイ</code> → <code>新しいデプロイ</code> → 種類は「ウェブアプリ」<br>
+          アクセスできるユーザー：<code>全員</code> に設定して「デプロイ」。</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="setup-num">4</div>
+        <div class="setup-content">
+          <h4>発行されたURLを上に貼り付ける</h4>
+          <p><code>https://script.google.com/macros/s/.../exec</code> の形式のURLをコピーして上の入力欄に貼り付け、保存してください。</p>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <span style="font-size:12px;color:var(--text2)">GAS コード</span>
+          <button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" onclick="copyGasCode()">📋 コピー</button>
+        </div>
+        <div class="code-block" id="gas-code-block"></div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+
+<!-- ============================================
+     JavaScript：ページ切り替えの仕組み
+     ============================================ -->
+<script>
+
+// ============================================
+// 【Step 2】データ構造（state）の定義
+//
+// このアプリが扱うすべてのデータをここに集約する。
+// state を「唯一の情報源（Single Source of Truth）」と呼ぶ。
+// 画面の表示はすべて state を読んで描画する。
+// ============================================
+const state = {
+
+  // ---- メンバー一覧 ----
+  // 文字列の配列。ここに登録した名前が各フォームのドロップダウンに出る。
+  members: [],
+
+  // ---- 経費データ ----
+  // 振り分け・手動入力で追加された経費取引の配列。
+  // 各取引は以下のプロパティを持つ：
+  //   id          : 一意のID（例: "e_1699000000000"）
+  //   receiptNo   : 受付番号（例: "25110401"）
+  //   date        : 記入日（例: "2025-11-04"）
+  //   receiptDate : 領収書日付
+  //   item        : 品目・概要
+  //   company     : 購入会社
+  //   purpose     : 用途
+  //   person      : 担当者名
+  //   amount      : 金額（数値）
+  //   receiptUrl  : 領収書のGoogle DriveリンクURL
+  //   note        : 備考
+  //   status      : "pending"（未返金）or "paid"（返金済み）
+  expenses: [],
+
+  // ---- 部費データ ----
+  // 経費と同じ構造。台帳・返金管理に使う。
+  clubs: [],
+
+  // ---- 預金残高データ ----
+  // 入金・出金の履歴。残高は自動計算する。
+  // 各行のプロパティ：
+  //   id       : 一意のID
+  //   date     : 日付
+  //   label    : 摘要（例: "部費回収 4月分"）
+  //   income   : 入金額（数値、なければ 0）
+  //   expense  : 出金額（数値、なければ 0）
+  //   person   : 担当者名
+  //   note     : 詳細メモ（右ペインに表示する内容）
+  balance: [],
+
+  // ---- メモデータ ----
+  // 日付付きの自由メモの配列。
+  //   id      : 一意のID
+  //   date    : 作成日
+  //   title   : タイトル
+  //   content : 本文
+  notes: [],
+
+  // ---- フォーム取り込みキュー ----
+  // GAS から取得したフォーム回答で、まだ振り分けていないもの。
+  // Step 6 で本実装。
+  formQueue: [],
+
+  // ---- アプリ設定 ----
+  settings: {
+    gasUrl   : '',  // GAS WebアプリのURL（Step 7 で使う）
+    sheetId  : '',  // スプレッドシートID
+  },
+};
+
+
+// ============================================
+// localStorageへの保存・読み込み
+//
+// localStorage = ブラウザが持つ小さな保存場所。
+// ページを閉じてもデータが残る。
+// ただし同じブラウザ・同じドメインでしか読めない。
+// ============================================
+
+// state 全体を localStorage に書き込む
+function saveState() {
+  localStorage.setItem('krt_v1', JSON.stringify(state));
+}
+
+// localStorage から state を復元する
+// アプリ起動時に一度だけ呼ぶ
+function loadState() {
+  const saved = localStorage.getItem('krt_v1');
+  if (!saved) return; // 初回起動時は何もしない
+
+  try {
+    const parsed = JSON.parse(saved);
+    // 保存されていた値を state に上書きする
+    // Object.assign は「浅いコピー」なので、
+    // ネストが深い settings だけ別途処理する
+    Object.assign(state, parsed);
+    if (parsed.settings) Object.assign(state.settings, parsed.settings);
+  } catch (e) {
+    console.warn('データの読み込みに失敗しました', e);
+  }
+}
+
+
+// ============================================
+// ナビゲーション（Step 1 から変更なし）
+// ============================================
+const navItems = document.querySelectorAll('.nav-item');
+const pages    = document.querySelectorAll('.page');
+
+navItems.forEach(function(item) {
+  item.addEventListener('click', function() {
+    const targetPage = this.dataset.page;
+    if (!targetPage) return;
+
+    navItems.forEach(function(nav) { nav.classList.remove('active'); });
+    this.classList.add('active');
+
+    pages.forEach(function(page) { page.classList.remove('active'); });
+    const target = document.getElementById('page-' + targetPage);
+    if (target) target.classList.add('active');
+  });
+});
+
+
+// ============================================
+// メンバー管理
+// ============================================
+
+// メンバーを追加する
+function addMember() {
+  const input = document.getElementById('input-member-name');
+  const name  = input.value.trim();
+
+  // バリデーション（入力チェック）
+  if (!name) {
+    showToast('名前を入力してください', 'error');
+    return;
+  }
+  if (state.members.includes(name)) {
+    showToast('すでに登録されています', 'error');
+    return;
+  }
+
+  // state に追加 → 保存 → 画面を更新
+  state.members.push(name);
+  saveState();
+  renderMemberList();
+  populatePersonSelects();
+  populateBalancePersonSelect();
+  renderRefund();
+  input.value = '';
+  showToast(name + ' を追加しました', 'success');
+}
+
+// メンバーを削除する
+function removeMember(btn) {
+  // ボタンの data-name 属性から名前を取得
+  const name = btn.dataset.name;
+  // filter で該当メンバー以外だけ残す
+  state.members = state.members.filter(function(m) { return m !== name; });
+  saveState();
+  renderMemberList();
+  showToast(name + ' を削除しました');
+}
+
+// メンバー一覧を画面に描画する
+function renderMemberList() {
+  const list = document.getElementById('member-list');
+  if (!list) return;
+
+  if (state.members.length === 0) {
+    list.innerHTML = '<p style="font-size:13px;color:var(--text3)">まだメンバーが登録されていません</p>';
+    return;
+  }
+
+  // メンバーごとにタグを生成
+  list.innerHTML = state.members.map(function(name) {
+    return `<div class="member-tag">
+      <span class="member-tag-name">${name}</span>
+      <button class="member-tag-remove" data-name="${name}" onclick="removeMember(this)" title="削除">✕</button>
+    </div>`;
+  }).join('');
+}
+
+// Enterキーでも追加できるようにする
+document.addEventListener('DOMContentLoaded', function() {
+  const input = document.getElementById('input-member-name');
+  if (input) {
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') addMember();
+    });
+  }
+});
+
+
+// ============================================
+// トースト通知
+// 画面右下に一時的なメッセージを表示する
+// ============================================
+function showToast(message, type) {
+  // type は 'success'（緑）/ 'error'（赤）/ 未指定（青）
+  type = type || 'default';
+
+  // すでにあるトーストを使い回す
+  let toast = document.getElementById('toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'toast';
+    toast.className = 'toast';
+    document.body.appendChild(toast);
+  }
+
+  toast.textContent = message;
+  toast.className   = 'toast ' + type;
+
+  // 少し待ってから show クラスを付けてフェードイン
+  setTimeout(function() { toast.classList.add('show'); }, 10);
+
+  // 2.5秒後に消す
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(function() {
+    toast.classList.remove('show');
+  }, 2500);
+}
+
+
+// ============================================
+// アプリの起動処理
+// ============================================
+
+// ============================================
+// 【Step 3】手動入力・台帳表示
+// ============================================
+
+// ---- タブ切り替え ----
+// 経費タブ・部費タブを切り替える
+function switchEntryTab(type, clickedBtn) {
+  // タブボタンのスタイル切り替え
+  document.querySelectorAll('.tab-btn').forEach(function(b) {
+    b.classList.remove('active');
+  });
+  clickedBtn.classList.add('active');
+
+  // フォームの表示切り替え
+  document.getElementById('entry-expense').style.display = type === 'expense' ? 'block' : 'none';
+  document.getElementById('entry-club').style.display    = type === 'club'    ? 'block' : 'none';
+}
+
+// ---- ページ遷移ヘルパー ----
+// JavaScript から特定ページに移動したい時に使う
+function showPage(pageName) {
+  // ナビ項目を探してクリックと同じ処理を実行
+  document.querySelectorAll('.nav-item').forEach(function(item) {
+    if (item.dataset.page === pageName) item.click();
+  });
+}
+
+// ---- 受付番号の自動採番 ----
+// 形式：年2桁 + 月2桁 + 日2桁 + 連番2桁（例: 25110401）
+function generateReceiptNo(type) {
+  const now   = new Date();
+  const yy    = String(now.getFullYear()).slice(-2);   // 25
+  const mm    = String(now.getMonth() + 1).padStart(2, '0'); // 11
+  const dd    = String(now.getDate()).padStart(2, '0');       // 04
+  const prefix = yy + mm + dd; // 251104
+
+  // 同じ日・同じ種別の既存データを数えて連番を決める
+  const list = type === 'expense' ? state.expenses : state.clubs;
+  const todayEntries = list.filter(function(e) {
+    return e.receiptNo && e.receiptNo.startsWith(prefix);
+  });
+  const seq = String(todayEntries.length + 1).padStart(2, '0'); // 01, 02...
+  return prefix + seq; // 25110401
+}
+
+// ---- 入力フォームを今日の日付で初期化 ----
+function initEntryDates() {
+  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  const expDate  = document.getElementById('exp-date');
+  const clubDate = document.getElementById('club-date');
+  if (expDate  && !expDate.value)  expDate.value  = today;
+  if (clubDate && !clubDate.value) clubDate.value = today;
+}
+
+// ---- 担当者ドロップダウンを state.members で更新 ----
+function populatePersonSelects() {
+  const selectIds = ['exp-person', 'club-person'];
+  selectIds.forEach(function(id) {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    const current = sel.value; // 現在の選択を記憶
+    sel.innerHTML = '<option value="">選択してください</option>';
+    state.members.forEach(function(name) {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+    sel.value = current; // 選択を復元
+  });
+}
+
+// ---- 入力保存 ----
+function saveEntry(type) {
+  // フォームの値を取得
+  const isExpense = type === 'expense';
+  const prefix    = isExpense ? 'exp' : 'club';
+
+  const date        = document.getElementById(prefix + '-date').value;
+  const receiptDate = document.getElementById(prefix + '-receipt-date').value;
+  const item        = document.getElementById(prefix + '-item').value.trim();
+  const company     = document.getElementById(prefix + '-company').value.trim();
+  const purpose     = document.getElementById(prefix + '-purpose').value.trim();
+  const person      = document.getElementById(prefix + '-person').value;
+  const amount      = parseFloat(document.getElementById(prefix + '-amount').value) || 0;
+  const note        = document.getElementById(prefix + '-note').value.trim();
+  const url         = isExpense
+    ? document.getElementById('exp-url').value.trim()
+    : '';
+  const direction   = isExpense
+    ? 'expense'
+    : document.getElementById('club-direction').value;
+
+  // バリデーション（必須項目チェック）
+  if (!date)   { showToast('記入日を入力してください', 'error'); return; }
+  if (!item)   { showToast('品目・概要を入力してください', 'error'); return; }
+  if (!person) { showToast('担当者を選択してください', 'error'); return; }
+  if (amount <= 0) { showToast('金額を入力してください', 'error'); return; }
+
+  // 受付番号を自動採番
+  const receiptNo = generateReceiptNo(type);
+
+  // データオブジェクトを作成
+  const entry = {
+    id          : type + '_' + Date.now(),
+    receiptNo   : receiptNo,
+    date        : date,
+    receiptDate : receiptDate,
+    item        : item,
+    company     : company,
+    purpose     : purpose,
+    person      : person,
+    amount      : amount,
+    receiptUrl  : url,
+    note        : note,
+    direction   : direction, // 'expense'（出金）or 'income'（入金）
+    status      : 'pending', // 初期は未返金
+    source      : 'manual',  // 手動入力
+  };
+
+  // state に追加して保存
+  if (isExpense) {
+    state.expenses.push(entry);
+  } else {
+    state.clubs.push(entry);
+  }
+  saveState();
+
+  // 台帳・ダッシュボードを再描画
+  renderLedger('expense');
+  renderLedger('club');
+  renderDashboard();
+  updateRefundBadge();
+
+  clearEntryForm(type);
+  showToast('受付番号 ' + receiptNo + ' で保存しました', 'success');
+}
+
+// ---- フォームをクリア ----
+function clearEntryForm(type) {
+  const prefix = type === 'expense' ? 'exp' : 'club';
+  const today  = new Date().toISOString().split('T')[0];
+  document.getElementById(prefix + '-date').value         = today;
+  document.getElementById(prefix + '-receipt-date').value = '';
+  document.getElementById(prefix + '-item').value         = '';
+  document.getElementById(prefix + '-company').value      = '';
+  document.getElementById(prefix + '-purpose').value      = '';
+  document.getElementById(prefix + '-person').value       = '';
+  document.getElementById(prefix + '-amount').value       = '';
+  document.getElementById(prefix + '-note').value         = '';
+  if (type === 'expense') {
+    document.getElementById('exp-url').value = '';
+  }
+}
+
+// ---- 台帳の描画 ----
+// type: 'expense' or 'club'
+// month: 'all' or '4'～'3'（月の数字の文字列）
+function renderLedger(type, month) {
+  month = month || 'all';
+  const list  = type === 'expense' ? state.expenses : state.clubs;
+  const tbody = document.getElementById(type === 'expense' ? 'exp-ledger-body' : 'club-ledger-body');
+  const count = document.getElementById(type === 'expense' ? 'exp-ledger-count' : 'club-ledger-count');
+  if (!tbody) return;
+
+  // 月フィルター適用
+  const filtered = list.filter(function(e) {
+    if (month === 'all') return true;
+    const m = new Date(e.date).getMonth() + 1; // 1〜12
+    return String(m) === String(month);
+  });
+
+  // 件数・合計金額を表示
+  const total = filtered.reduce(function(sum, e) { return sum + e.amount; }, 0);
+  if (count) {
+    count.textContent = filtered.length + '件  合計 ¥' + total.toLocaleString();
+  }
+
+  // 空状態
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">データがありません</td></tr>';
+    return;
+  }
+
+  // 行を生成（新しい順、テンプレートリテラル使用）
+  tbody.innerHTML = filtered.slice().reverse().map(function(e) {
+    const urlCell  = e.receiptUrl ? `<a href="${e.receiptUrl}" target="_blank">📎 確認</a>` : '-';
+    const dirBadge = e.direction === 'income'
+      ? '<span style="color:var(--accent-g);font-size:11px">入金</span>'
+      : '<span style="color:var(--accent-r);font-size:11px">出金</span>';
+    const company = e.company || '-';
+    const purpose = e.purpose || '-';
+
+    if (type === 'expense') {
+      return `<tr>
+        <td class="td-mono">${e.receiptNo}</td>
+        <td>${e.date}</td>
+        <td>${e.item}</td>
+        <td>${company}</td>
+        <td>${purpose}</td>
+        <td>${e.person}</td>
+        <td class="td-amount">¥${e.amount.toLocaleString()}</td>
+        <td class="td-url">${urlCell}</td>
+      </tr>`;
+    } else {
+      return `<tr>
+        <td class="td-mono">${e.receiptNo}</td>
+        <td>${e.date}</td>
+        <td>${e.item}</td>
+        <td>${company}</td>
+        <td>${purpose}</td>
+        <td>${e.person}</td>
+        <td>${dirBadge}</td>
+        <td class="td-amount">¥${e.amount.toLocaleString()}</td>
+      </tr>`;
+    }
+  }).join('');
+}
+
+// ---- 月フィルターボタンのクリック処理 ----
+function filterLedger(type, month, btn) {
+  // ボタンのスタイル切り替え
+  const isGreen = type === 'club';
+  const container = document.getElementById(type === 'expense' ? 'exp-month-filter' : 'club-month-filter');
+  if (container) {
+    container.querySelectorAll('.month-btn').forEach(function(b) {
+      b.classList.remove('active');
+    });
+    btn.classList.add('active');
+    if (isGreen) btn.classList.add('green');
+  }
+  renderLedger(type, month);
+}
+
+
+
+// ============================================
+// 【Step 4】個人別返金・預金残高
+// ============================================
+
+// ---- 個人別返金の描画 ----
+// テンプレートリテラル（`...`）を使って文字列を組み立てる
+// + での連結と違いクォートの衝突が起きない
+function renderRefund() {
+  const grid = document.getElementById('refund-grid');
+  if (!grid) return;
+
+  if (state.members.length === 0) {
+    grid.innerHTML = '<p style="color:var(--text3);font-size:13px">設定ページでメンバーを登録してください。</p>';
+    return;
+  }
+
+  grid.innerHTML = state.members.map(function(name) {
+
+    const expDebt = state.expenses
+      .filter(function(e) { return e.person === name && e.direction !== 'income' && e.status === 'pending'; })
+      .reduce(function(sum, e) { return sum + e.amount; }, 0);
+
+    const clubDebt = state.clubs
+      .filter(function(e) { return e.person === name && e.direction !== 'income' && e.status === 'pending'; })
+      .reduce(function(sum, e) { return sum + e.amount; }, 0);
+
+    const total    = expDebt + clubDebt;
+    const initial  = name.charAt(0);
+    const hasDebt  = total > 0;
+    const debtClass = hasDebt ? 'has-debt' : 'no-debt';
+    const debtText  = hasDebt ? ('¥' + total.toLocaleString()) : '精算済';
+
+    const paidTotal = []
+      .concat(state.expenses, state.clubs)
+      .filter(function(e) { return e.person === name && e.status === 'paid'; })
+      .reduce(function(sum, e) { return sum + e.amount; }, 0);
+
+    // テンプレートリテラルで組み立て（クォートの衝突なし）
+    return `<div class="refund-card" id="refund-card-${name}">
+      <div class="refund-card-header">
+        <div class="refund-avatar">${initial}</div>
+        <div class="refund-name">${name}</div>
+        <div class="refund-total ${debtClass}">${debtText}</div>
+      </div>
+      <div class="refund-stat"><span class="refund-stat-label">経費立替残</span><span>¥${expDebt.toLocaleString()}</span></div>
+      <div class="refund-stat"><span class="refund-stat-label">部費立替残</span><span>¥${clubDebt.toLocaleString()}</span></div>
+      <div class="refund-stat"><span class="refund-stat-label">返金済み合計</span><span>¥${paidTotal.toLocaleString()}</span></div>
+      <div class="refund-input-row">
+        <input type="number" class="text-input" id="refund-amount-${name}" placeholder="返金額を入力" min="0">
+        <button class="btn btn-primary btn-sm" data-name="${name}" onclick="recordRefund(this)">返金記録</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ---- 返金を記録する ----
+// 返金があった時に「その人の古い立替から順番に paid にしていく」
+function recordRefund(btn) {
+  const name   = btn.dataset.name;
+  const input  = document.getElementById('refund-amount-' + name);
+  let   amount = parseFloat(input.value) || 0;
+  if (amount <= 0) { showToast('返金額を入力してください', 'error'); return; }
+
+  // 経費・部費の未返金を古い順に並べる
+  const pending = []
+    .concat(
+      state.expenses.filter(function(e) { return e.person === name && e.direction !== 'income' && e.status === 'pending'; }),
+      state.clubs.filter(function(e) { return e.person === name && e.direction !== 'income' && e.status === 'pending'; })
+    )
+    .sort(function(a, b) { return a.date.localeCompare(b.date); }); // 古い順
+
+  // 返金額を古い取引から充当していく
+  let remaining = amount;
+  pending.forEach(function(entry) {
+    if (remaining <= 0) return;
+    // entry.amount 以上残っていれば全額返済済み
+    if (remaining >= entry.amount) {
+      entry.status  = 'paid';
+      remaining    -= entry.amount;
+    }
+    // 足りない場合はそのまま（端数は次回）
+  });
+
+  saveState();
+  renderRefund();
+  updateRefundBadge();
+  renderDashboard();
+  input.value = '';
+  showToast(name + ' の返金を記録しました', 'success');
+}
+
+// ---- 個人別返金バッジを更新 ----
+function updateRefundBadge() {
+  const badge = document.getElementById('badge-refund');
+  if (!badge) return;
+  // 未返金のある人数をカウント
+  const count = state.members.filter(function(name) {
+    const debt = []
+      .concat(state.expenses, state.clubs)
+      .filter(function(e) { return e.person === name && e.direction !== 'income' && e.status === 'pending'; })
+      .reduce(function(sum, e) { return sum + e.amount; }, 0);
+    return debt > 0;
+  }).length;
+
+  badge.textContent = count;
+  if (count > 0) badge.classList.add('visible');
+  else           badge.classList.remove('visible');
+}
+
+
+// ---- 預金残高：新規追加 ----
+function saveBalance() {
+  const date    = document.getElementById('bal-date').value;
+  const label   = document.getElementById('bal-label').value.trim();
+  const income  = parseFloat(document.getElementById('bal-income').value)  || 0;
+  const expense = parseFloat(document.getElementById('bal-expense').value) || 0;
+  const person  = document.getElementById('bal-person').value;
+  const note    = document.getElementById('bal-note').value.trim();
+
+  // バリデーション
+  if (!date)              { showToast('日付を入力してください', 'error'); return; }
+  if (!label)             { showToast('摘要を入力してください', 'error'); return; }
+  if (income === 0 && expense === 0) { showToast('入金額か出金額を入力してください', 'error'); return; }
+
+  const entry = {
+    id      : 'bal_' + Date.now(),
+    date    : date,
+    label   : label,
+    income  : income,
+    expense : expense,
+    person  : person,
+    note    : note,
+  };
+
+  state.balance.push(entry);
+  saveState();
+  renderBalanceTable();
+  renderDashboard();
+
+  // フォームをクリア
+  document.getElementById('bal-label').value   = '';
+  document.getElementById('bal-income').value  = '';
+  document.getElementById('bal-expense').value = '';
+  document.getElementById('bal-person').value  = '';
+  document.getElementById('bal-note').value    = '';
+  showToast('追加しました', 'success');
+}
+
+// ---- 預金残高テーブルを描画 ----
+function renderBalanceTable() {
+  const tbody = document.getElementById('balance-table-body');
+  if (!tbody) return;
+
+  // 日付順に並べて残高を累計計算
+  const sorted = state.balance.slice().sort(function(a, b) {
+    return a.date.localeCompare(b.date);
+  });
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="table-empty">データがありません。上のフォームから追加してください。</td></tr>';
+    updateBalanceSummary(0, 0);
+    return;
+  }
+
+  let running = 0; // 累計残高
+  const rows  = sorted.map(function(entry) {
+    running += entry.income;
+    running -= entry.expense;
+    return { entry: entry, balance: running };
+  });
+
+  // サマリ更新
+  const totalIncome  = sorted.reduce(function(s, e) { return s + e.income;  }, 0);
+  const totalExpense = sorted.reduce(function(s, e) { return s + e.expense; }, 0);
+  updateBalanceSummary(totalIncome, totalExpense);
+
+  // 新しい順に表示（表示は逆順）
+  tbody.innerHTML = rows.slice().reverse().map(function(row) {
+    const e   = row.entry;
+    const inc = e.income  > 0 ? `<span style="color:var(--accent-g)">+¥${e.income.toLocaleString()}</span>`  : '-';
+    const exp = e.expense > 0 ? `<span style="color:var(--accent-r)">-¥${e.expense.toLocaleString()}</span>` : '-';
+    const person = e.person || '-';
+    return `<tr onclick="showBalanceDetail(this)" data-id="${e.id}" style="cursor:pointer">
+      <td>${e.date}</td>
+      <td>${e.label}</td>
+      <td class="td-mono">${inc}</td>
+      <td class="td-mono">${exp}</td>
+      <td class="td-mono td-amount">¥${row.balance.toLocaleString()}</td>
+      <td>${person}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ---- 残高サマリを更新 ----
+function updateBalanceSummary(income, expense) {
+  const incEl = document.getElementById('bal-total-income');
+  const expEl = document.getElementById('bal-total-expense');
+  const curEl = document.getElementById('bal-current');
+  if (incEl) incEl.textContent = '¥' + income.toLocaleString();
+  if (expEl) expEl.textContent = '¥' + expense.toLocaleString();
+  if (curEl) curEl.textContent = '¥' + (income - expense).toLocaleString();
+}
+
+// ---- 行クリックで右ペインに詳細表示 ----
+function showBalanceDetail(el) {
+  const id    = el.dataset.id;
+  const entry = state.balance.find(function(e) { return e.id === id; });
+  if (!entry) return;
+
+  // 選択行のハイライト切り替え
+  document.querySelectorAll('#balance-table-body tr').forEach(function(tr) {
+    tr.classList.remove('selected');
+  });
+  el.classList.add('selected');
+
+  const pane = document.getElementById('balance-detail-pane');
+  if (!pane) return;
+
+  const typeLabel = entry.income > 0
+    ? '<span style="color:var(--accent-g)">入金</span>'
+    : '<span style="color:var(--accent-r)">出金</span>';
+  const amount = entry.income > 0
+    ? '+¥' + entry.income.toLocaleString()
+    : '-¥' + entry.expense.toLocaleString();
+
+  pane.innerHTML =
+    '<div class="detail-pane-title">詳細</div>' +
+    '<div class="detail-row"><span class="detail-label">日付</span><span class="detail-value">' + entry.date + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">摘要</span><span class="detail-value">' + entry.label + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">種別</span><span class="detail-value">' + typeLabel + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">金額</span><span class="detail-value" style="font-family:DM Mono,monospace;font-size:18px">' + amount + '</span></div>' +
+    '<div class="detail-row"><span class="detail-label">担当者</span><span class="detail-value">' + (entry.person || '-') + '</span></div>' +
+    (entry.note ? '<div class="detail-note">' + entry.note + '</div>' : '');
+}
+
+// ---- 預金残高の担当者ドロップダウンも更新 ----
+function populateBalancePersonSelect() {
+  const sel = document.getElementById('bal-person');
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = '<option value="">選択してください</option>';
+  state.members.forEach(function(name) {
+    const opt = document.createElement('option');
+    opt.value = name;
+    opt.textContent = name;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+}
+
+
+
+// ============================================
+// 【Step 5】ダッシュボード集計・描画
+// ============================================
+
+function renderDashboard() {
+
+  // ---- サマリカードの集計 ----
+
+  // 経費：全取引数と合計金額
+  const expCount = state.expenses.length;
+  const expTotal = state.expenses.reduce(function(s, e) { return s + e.amount; }, 0);
+  setText('dash-exp-count', expCount + '件');
+  setText('dash-exp-total', '合計 ¥' + expTotal.toLocaleString());
+
+  // 部費：全取引数と合計金額
+  const clubCount = state.clubs.length;
+  const clubTotal = state.clubs.reduce(function(s, e) { return s + e.amount; }, 0);
+  setText('dash-club-count', clubCount + '件');
+  setText('dash-club-total', '合計 ¥' + clubTotal.toLocaleString());
+
+  // 未返金：経費＋部費の pending を合算
+  const pendingExp  = state.expenses.filter(function(e) { return e.status === 'pending' && e.direction !== 'income'; });
+  const pendingClub = state.clubs.filter(function(e) { return e.status === 'pending' && e.direction !== 'income'; });
+  const debtTotal   = [...pendingExp, ...pendingClub].reduce(function(s, e) { return s + e.amount; }, 0);
+
+  // 未返金のある人数（重複なし）
+  const debtPersons = new Set([...pendingExp, ...pendingClub].map(function(e) { return e.person; })).size;
+  setText('dash-debt-total',   '¥' + debtTotal.toLocaleString());
+  setText('dash-debt-persons', debtPersons + ' 人');
+
+  // 預金残高：balance の入金 - 出金
+  const balIncome  = state.balance.reduce(function(s, e) { return s + e.income;  }, 0);
+  const balExpense = state.balance.reduce(function(s, e) { return s + e.expense; }, 0);
+  setText('dash-balance', '¥' + (balIncome - balExpense).toLocaleString());
+
+  // ---- 最近の取引（経費＋部費を日付順に並べて上位8件） ----
+  const allEntries = [
+    ...state.expenses.map(function(e) { return Object.assign({}, e, { ledger: '経費' }); }),
+    ...state.clubs.map(function(e)    { return Object.assign({}, e, { ledger: '部費' }); }),
+  ].sort(function(a, b) {
+    return b.date.localeCompare(a.date); // 新しい順
+  }).slice(0, 8);
+
+  const recentBody = document.getElementById('dash-recent-body');
+  if (recentBody) {
+    if (allEntries.length === 0) {
+      recentBody.innerHTML = '<tr><td colspan="5" class="table-empty">取引データがありません</td></tr>';
+    } else {
+      recentBody.innerHTML = allEntries.map(function(e) {
+        const typeColor = e.ledger === '経費' ? 'var(--accent)' : 'var(--accent-g)';
+        const statusBadge = e.status === 'pending' && e.direction !== 'income'
+          ? '<span style="color:var(--accent-r);font-size:10px">未返金</span>'
+          : '<span style="color:var(--accent-g);font-size:10px">済</span>';
+        return `<tr>
+          <td>${e.date}</td>
+          <td>${e.item}</td>
+          <td>${e.person || '-'}</td>
+          <td><span style="color:${typeColor};font-size:11px">${e.ledger}</span></td>
+          <td class="td-mono" style="color:var(--text)">¥${e.amount.toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+    }
+  }
+
+  // ---- 立替残高ランキング ----
+  // メンバーごとに未返金合計を計算して降順ソート
+  const ranking = state.members.map(function(name) {
+    const debt = [...state.expenses, ...state.clubs]
+      .filter(function(e) { return e.person === name && e.status === 'pending' && e.direction !== 'income'; })
+      .reduce(function(s, e) { return s + e.amount; }, 0);
+    return { name: name, debt: debt };
+  }).filter(function(r) {
+    return r.debt > 0; // 未返金がある人だけ
+  }).sort(function(a, b) {
+    return b.debt - a.debt; // 多い順
+  });
+
+  const rankingEl = document.getElementById('dash-ranking');
+  if (rankingEl) {
+    if (ranking.length === 0) {
+      rankingEl.innerHTML = '<p style="color:var(--text3);font-size:13px;padding:20px 0">未返金の立替はありません 🎉</p>';
+    } else {
+      const maxDebt = ranking[0].debt; // バーの基準（最大値）
+      rankingEl.innerHTML = ranking.slice(0, 8).map(function(r, i) {
+        const barWidth = Math.round(r.debt / maxDebt * 100);
+        const numClass = i === 0 ? 'ranking-num top' : 'ranking-num';
+        return `<div class="ranking-item">
+          <div class="${numClass}">${i + 1}</div>
+          <div class="ranking-name">${r.name}</div>
+          <div class="ranking-bar-wrap">
+            <div class="ranking-bar" style="width:${barWidth}%"></div>
+          </div>
+          <div class="ranking-amount">¥${r.debt.toLocaleString()}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+// ---- テキストをセットするヘルパー ----
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+
+
+// ============================================
+// 【Step 6】振り分け（Triage）機能
+// ============================================
+
+// 表示モード：未処理のみ or 済みも含む
+let triageShowDone = false;
+
+// 現在選択中のフォームデータID
+let triageSelectedId = null;
+
+// ---- GASからフォームデータを取得 ----
+function fetchFromGAS() {
+  if (!state.settings.gasUrl) {
+    // GAS未設定の場合は案内を表示
+    document.getElementById('triage-gas-notice').style.display = 'block';
+    showToast('連携設定でGAS URLを入力してください', 'error');
+    return;
+  }
+
+  showToast('フォームデータを取得中...', 'default');
+
+  fetch(state.settings.gasUrl + '?action=read&sheet=' + encodeURIComponent('フォーム転記'))
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.status !== 'ok') throw new Error(data.message || '取得失敗');
+
+    const rows  = data.data || [];
+    let added   = 0;
+
+    // ヘッダー行をスキップして各行を処理
+    rows.slice(1).forEach(function(row) {
+      // 既に取り込み済みのものはスキップ（タイムスタンプで照合）
+      const timestamp = String(row[0] || '');
+      if (state.formQueue.find(function(q) { return q.timestamp === timestamp; })) return;
+
+      state.formQueue.push({
+        id          : 'fq_' + Date.now() + '_' + added,
+        timestamp   : timestamp,
+        name        : String(row[1] || ''),   // 氏名
+        item        : String(row[2] || ''),   // 品目
+        amount      : parseFloat(row[3]) || 0, // 金額
+        receiptUrl  : String(row[4] || ''),   // 領収書URL
+        note        : String(row[5] || ''),   // 備考
+        rawRow      : row,                    // 元データ（GASへの書き戻しに使う）
+        status      : 'pending',              // pending / done
+        ledger      : null,                   // 振り分け後: 'expense' or 'club'
+      });
+      added++;
+    });
+
+    saveState();
+    renderTriageList();
+    updateTriageBadge();
+    showToast(added + '件の新しいデータを取得しました', 'success');
+    updateGasStatusBadge(true);
+  })
+  .catch(function(err) {
+    showToast('取得失敗：' + err.message, 'error');
+    updateGasStatusBadge(false);
+  });
+}
+
+// ---- サンプルデータを追加（GAS未設定時のデモ用） ----
+function addSampleFormData() {
+  const samples = [
+    { name:'飯田真衣',   item:'ファミリーマート ゴミ袋',       amount: 498,   receiptUrl:'', note:'初めての経費落とし' },
+    { name:'長野力己',   item:'高速代 エフコン設定',           amount: 4020,  receiptUrl:'', note:'' },
+    { name:'飯田真衣',   item:'ケーヨーデイツー HDMIケーブル', amount: 987,   receiptUrl:'', note:'どのモニター使えるん？' },
+    { name:'加藤悠大',   item:'エステーリンクフレームパイプ費', amount: 91300, receiptUrl:'', note:'アコードの維持費' },
+  ];
+
+  const now = new Date();
+  samples.forEach(function(s, i) {
+    state.formQueue.push(Object.assign({}, s, {
+      id        : 'fq_sample_' + i,
+      timestamp : now.toISOString(),
+      status    : 'pending',
+      ledger    : null,
+      rawRow    : [],
+    }));
+  });
+
+  saveState();
+  renderTriageList();
+  updateTriageBadge();
+  document.getElementById('triage-gas-notice').style.display = 'none';
+  showToast('サンプルデータを4件追加しました', 'success');
+}
+
+// ---- 未処理リストを描画 ----
+function renderTriageList() {
+  const list  = document.getElementById('triage-list');
+  const label = document.getElementById('triage-count-label');
+  if (!list) return;
+
+  // 表示するデータを絞り込む
+  const items = state.formQueue.filter(function(q) {
+    return triageShowDone || q.status === 'pending';
+  });
+
+  const pendingCount = state.formQueue.filter(function(q) { return q.status === 'pending'; }).length;
+  if (label) label.textContent = '未処理 ' + pendingCount + '件';
+
+  if (items.length === 0) {
+    list.innerHTML = `<div style="padding:40px;text-align:center;color:var(--text3);font-size:13px">
+      ${state.formQueue.length === 0
+        ? '「フォームデータ取得」ボタンで回答を読み込んでください'
+        : '未処理のデータはありません 🎉'}
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(function(q) {
+    const isDone    = q.status === 'done';
+    const dotClass  = isDone ? 'done' : 'pending';
+    const activeClass = q.id === triageSelectedId ? ' active' : '';
+    const opacity   = isDone ? 'opacity:0.5;' : '';
+    const ledgerTag = isDone
+      ? `<span style="font-size:10px;color:${q.ledger==='expense'?'var(--accent)':'var(--accent-g)'}">
+           ${q.ledger==='expense'?'経費':'部費'}済
+         </span>`
+      : '';
+
+    return `<div class="triage-item${activeClass}" style="${opacity}" onclick="selectTriageItem('${q.id}')">
+      <span class="status-dot ${dotClass}"></span>
+      <span class="triage-item-date">${q.timestamp.slice(5,10).replace('-','/')}</span>
+      <span class="triage-item-name">${q.name || '不明'}</span>
+      <span class="triage-item-item">${q.item}</span>
+      ${ledgerTag}
+      <span class="triage-item-amount">¥${(q.amount||0).toLocaleString()}</span>
+    </div>`;
+  }).join('');
+}
+
+// ---- アイテムを選択して右ペインに詳細表示 ----
+function selectTriageItem(id) {
+  triageSelectedId = id;
+  const q = state.formQueue.find(function(q) { return q.id === id; });
+  if (!q) return;
+
+  // リストのハイライトを更新
+  renderTriageList();
+
+  const pane = document.getElementById('triage-detail-pane');
+  if (!pane) return;
+
+  // Google DriveのURLをプレビュー用に変換
+  // https://drive.google.com/open?id=XXX
+  //   → https://drive.google.com/file/d/XXX/preview
+  // https://drive.google.com/file/d/XXX/view
+  //   → https://drive.google.com/file/d/XXX/preview
+  let previewUrl  = '';
+  let previewHtml = '<div class="receipt-no-url">領収書URLが登録されていません</div>';
+
+  if (q.receiptUrl) {
+    const idMatch = q.receiptUrl.match(/[-\w]{25,}/);
+    if (idMatch) {
+      previewUrl  = `https://drive.google.com/file/d/${idMatch[0]}/preview`;
+      previewHtml = `<iframe src="${previewUrl}" allowfullscreen></iframe>`;
+    } else {
+      previewHtml = `<a href="${q.receiptUrl}" target="_blank" style="color:var(--accent);font-size:13px">
+        外部リンクで開く ↗
+      </a>`;
+    }
+  }
+
+  const isDone = q.status === 'done';
+  const actionArea = isDone
+    ? `<div style="padding:16px 20px;text-align:center;color:var(--accent-g);font-size:13px">
+        ✓ ${q.ledger === 'expense' ? '経費' : '部費'}として転記済みです
+        <br><button class="btn btn-ghost" style="margin-top:10px;font-size:11px" onclick="undoTriage('${q.id}')">取り消し</button>
+       </div>`
+    : `<div class="triage-actions">
+        <button class="btn btn-expense" onclick="doTriage('${q.id}', 'expense')">
+          💜 経費へ転記
+        </button>
+        <button class="btn btn-club" onclick="doTriage('${q.id}', 'club')">
+          💚 部費へ転記
+        </button>
+       </div>`;
+
+  pane.innerHTML = `
+    <div class="receipt-preview">${previewHtml}</div>
+    <div class="triage-info">
+      <div class="detail-row"><span class="detail-label">提出日時</span><span class="detail-value">${q.timestamp}</span></div>
+      <div class="detail-row"><span class="detail-label">氏名</span><span class="detail-value">${q.name || '-'}</span></div>
+      <div class="detail-row"><span class="detail-label">品目</span><span class="detail-value">${q.item}</span></div>
+      <div class="detail-row"><span class="detail-label">金額</span><span class="detail-value" style="font-family:DM Mono,monospace;font-size:18px;color:var(--text)">¥${(q.amount||0).toLocaleString()}</span></div>
+      ${q.note ? `<div class="detail-row"><span class="detail-label">備考</span><span class="detail-value">${q.note}</span></div>` : ''}
+    </div>
+    ${actionArea}
+  `;
+}
+
+// ---- 振り分けを実行 ----
+function doTriage(id, ledger) {
+  const q = state.formQueue.find(function(q) { return q.id === id; });
+  if (!q) return;
+
+  // 受付番号を自動採番
+  const receiptNo = generateReceiptNo(ledger);
+
+  // 台帳に追加
+  const entry = {
+    id          : ledger + '_' + Date.now(),
+    receiptNo   : receiptNo,
+    date        : new Date().toISOString().split('T')[0],
+    receiptDate : '',
+    item        : q.item,
+    company     : '',
+    purpose     : '',
+    person      : q.name,
+    amount      : q.amount || 0,
+    receiptUrl  : q.receiptUrl || '',
+    note        : q.note || '',
+    direction   : 'expense',
+    status      : 'pending',
+    source      : 'form',  // フォーム由来
+  };
+
+  if (ledger === 'expense') {
+    state.expenses.push(entry);
+  } else {
+    state.clubs.push(entry);
+  }
+
+  // フォームキューの状態を更新
+  q.status     = 'done';
+  q.ledger     = ledger;
+  q.receiptNo  = receiptNo;
+
+  saveState();
+  renderTriageList();
+  selectTriageItem(id); // 右ペインを更新
+  updateTriageBadge();
+  renderLedger('expense');
+  renderLedger('club');
+  renderDashboard();
+  updateRefundBadge();
+
+  const ledgerName = ledger === 'expense' ? '経費' : '部費';
+  showToast(`受付番号 ${receiptNo} で${ledgerName}に転記しました`, 'success');
+
+  // GASに転記済みフラグを書き戻す（GAS接続済みの場合のみ）
+  if (state.settings.gasUrl) {
+    writeBackToGAS(q);
+  }
+}
+
+// ---- 振り分けを取り消し ----
+function undoTriage(id) {
+  const q = state.formQueue.find(function(q) { return q.id === id; });
+  if (!q) return;
+
+  // 台帳から該当エントリを削除
+  if (q.ledger === 'expense') {
+    state.expenses = state.expenses.filter(function(e) { return e.source !== 'form' || e.item !== q.item || e.person !== q.name; });
+  } else {
+    state.clubs = state.clubs.filter(function(e) { return e.source !== 'form' || e.item !== q.item || e.person !== q.name; });
+  }
+
+  q.status = 'pending';
+  q.ledger = null;
+
+  saveState();
+  renderTriageList();
+  selectTriageItem(id);
+  updateTriageBadge();
+  renderLedger('expense');
+  renderLedger('club');
+  renderDashboard();
+  showToast('転記を取り消しました', 'default');
+}
+
+// ---- GASに転記済みフラグを書き戻す ----
+function writeBackToGAS(q) {
+  if (!state.settings.gasUrl || !q.rawRow || q.rawRow.length === 0) return;
+  // GASの「フォーム転記」シートの転記済み列（例：B列=2列目）をTRUEに更新
+  const params = '?action=markDone&sheet=' + encodeURIComponent('フォーム転記')
+    + '&id=' + encodeURIComponent(q.timestamp)
+    + '&receiptNo=' + encodeURIComponent(q.receiptNo || '');
+  fetch(state.settings.gasUrl + params).catch(function() {});
+}
+
+// ---- 済みの表示/非表示トグル ----
+function toggleShowDone() {
+  triageShowDone = !triageShowDone;
+  const label = document.getElementById('toggle-done-label');
+  if (label) label.textContent = triageShowDone ? '未処理のみ表示' : '済みを表示';
+  renderTriageList();
+}
+
+// ---- 振り分けバッジを更新 ----
+function updateTriageBadge() {
+  const badge = document.getElementById('badge-triage');
+  if (!badge) return;
+  const count = state.formQueue.filter(function(q) { return q.status === 'pending'; }).length;
+  badge.textContent = count;
+  if (count > 0) badge.classList.add('visible');
+  else           badge.classList.remove('visible');
+}
+
+// ---- GAS接続状態バッジを更新 ----
+function updateGasStatusBadge(connected) {
+  const badge = document.getElementById('gas-status-badge');
+  if (!badge) return;
+  if (connected) {
+    badge.className  = 'gas-status connected';
+    badge.textContent = '🟢 GAS接続済み';
+  } else {
+    badge.className  = 'gas-status disconnected';
+    badge.textContent = '⚪ GAS未接続';
+  }
+}
+
+
+
+// ============================================
+// 【Step 7】設定保存・GAS連携・メモ帳
+// ============================================
+
+// ---- GAS設定を保存 ----
+function saveGasSettings() {
+  const url = document.getElementById('gas-url-input').value.trim();
+  const sid = document.getElementById('sheet-id-input').value.trim();
+
+  if (!url) { showToast('URLを入力してください', 'error'); return; }
+
+  state.settings.gasUrl  = url;
+  state.settings.sheetId = sid;
+  saveState();
+  updateGasStatusBadge(true);
+  showToast('設定を保存しました', 'success');
+
+  // 振り分けページの案内を非表示に
+  const notice = document.getElementById('triage-gas-notice');
+  if (notice) notice.style.display = 'none';
+}
+
+// ---- GAS接続テスト ----
+function testGasConnection() {
+  const url = document.getElementById('gas-url-input').value.trim();
+  if (!url) { showToast('URLを入力してください', 'error'); return; }
+
+  const status = document.getElementById('connection-status');
+  status.className = 'connection-status';
+  status.textContent = '接続テスト中...';
+  status.style.display = 'block';
+
+  // GETリクエストでpingを送る（CORS回避のためno-corsを使わずシンプルなGETで）
+  fetch(url + '?action=ping')
+  .then(function(res) { return res.json(); })
+  .then(function(data) {
+    if (data.status === 'ok') {
+      status.className = 'connection-status ok';
+      status.textContent = '✓ ' + (data.message || 'GASと接続できました');
+      updateGasStatusBadge(true);
+    } else {
+      throw new Error(data.message || '不明なエラー');
+    }
+  })
+  .catch(function(err) {
+    status.className = 'connection-status error';
+    status.textContent = '✗ 接続失敗：' + err.message;
+    updateGasStatusBadge(false);
+  });
+}
+
+// ---- GASコードをコピー ----
+function copyGasCode() {
+  const el = document.getElementById('gas-code-block');
+  if (!el) return;
+  navigator.clipboard.writeText(el.textContent)
+    .then(function()  { showToast('コードをコピーしました', 'success'); })
+    .catch(function() { showToast('コピーに失敗しました', 'error'); });
+}
+
+// ---- 設定ページのフォームに保存済み値を反映 ----
+function populateSettingsForm() {
+  const urlEl = document.getElementById('gas-url-input');
+  const sidEl = document.getElementById('sheet-id-input');
+  if (urlEl) urlEl.value = state.settings.gasUrl  || '';
+  if (sidEl) sidEl.value = state.settings.sheetId || '';
+}
+
+
+// ============================================
+// メモ帳
+// ============================================
+
+let currentNoteId = null; // 現在編集中のメモID
+let noteAutoSaveTimer = null;
+
+// ---- 新規メモを作成 ----
+function createNote() {
+  const note = {
+    id      : 'note_' + Date.now(),
+    title   : '',
+    content : '',
+    date    : new Date().toISOString().split('T')[0],
+    updatedAt: new Date().toISOString(),
+  };
+  state.notes.unshift(note); // 先頭に追加
+  saveState();
+  renderNoteList();
+  openNote(note.id);
+}
+
+// ---- メモ一覧を描画 ----
+function renderNoteList() {
+  const list  = document.getElementById('note-list');
+  const count = document.getElementById('notes-count');
+  if (!list) return;
+  if (count) count.textContent = state.notes.length + '件';
+
+  if (state.notes.length === 0) {
+    list.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">「＋ 新規メモ」で作成</div>';
+    return;
+  }
+
+  list.innerHTML = state.notes.map(function(n) {
+    const activeClass = n.id === currentNoteId ? ' active' : '';
+    const title = n.title || '（タイトルなし）';
+    return `<div class="note-list-item${activeClass}" onclick="openNote('${n.id}')">
+      <div class="note-list-title">${title}</div>
+      <div class="note-list-date">${n.date}</div>
+    </div>`;
+  }).join('');
+}
+
+// ---- メモを開く ----
+function openNote(id) {
+  currentNoteId = id;
+  const note = state.notes.find(function(n) { return n.id === id; });
+  if (!note) return;
+
+  renderNoteList(); // ハイライト更新
+
+  const editor = document.getElementById('note-editor');
+  if (!editor) return;
+
+  editor.innerHTML = `
+    <div class="notes-editor-header">
+      <input type="text" class="note-title-input" id="note-title-input"
+        placeholder="タイトルを入力..." value="${note.title}"
+        oninput="scheduleNoteSave()">
+      <span style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace">${note.date}</span>
+      <button class="btn btn-danger btn-sm" onclick="deleteNote('${note.id}')">削除</button>
+    </div>
+    <textarea class="note-body-input" id="note-body-input"
+      placeholder="ここに自由に書いてください&#10;&#10;例：&#10;・会計会議の議事録&#10;・部費徴収予定（5月：¥5,000/人）&#10;・追加徴収の連絡事項"
+      oninput="scheduleNoteSave()">${note.content}</textarea>
+  `;
+}
+
+// ---- 自動保存（入力から500ms後） ----
+function scheduleNoteSave() {
+  clearTimeout(noteAutoSaveTimer);
+  noteAutoSaveTimer = setTimeout(function() { saveCurrentNote(); }, 500);
+}
+
+// ---- 現在のメモを保存 ----
+function saveCurrentNote() {
+  if (!currentNoteId) return;
+  const note = state.notes.find(function(n) { return n.id === currentNoteId; });
+  if (!note) return;
+
+  const titleEl = document.getElementById('note-title-input');
+  const bodyEl  = document.getElementById('note-body-input');
+  if (titleEl) note.title   = titleEl.value;
+  if (bodyEl)  note.content = bodyEl.value;
+  note.updatedAt = new Date().toISOString();
+
+  saveState();
+  renderNoteList(); // タイトルを反映
+}
+
+// ---- メモを削除 ----
+function deleteNote(id) {
+  state.notes = state.notes.filter(function(n) { return n.id !== id; });
+  if (currentNoteId === id) currentNoteId = null;
+  saveState();
+  renderNoteList();
+
+  const editor = document.getElementById('note-editor');
+  if (editor) {
+    editor.innerHTML = '<div style="padding:60px;text-align:center;color:var(--text3);font-size:13px">左のメモを選択するか、新規メモを作成してください</div>';
+  }
+  showToast('メモを削除しました');
+}
+
+
+// ---- GASコードをコードブロックにセット ----
+function initGasCodeBlock() {
+  const el = document.getElementById('gas-code-block');
+  if (el) el.textContent = `// KRT会計システム - Google Apps Script
+// スプレッドシートの「拡張機能 → Apps Script」に貼り付けてください
+
+function doPost(e) {
+  const params = JSON.parse(e.postData.contents);
+  const action = params.action;
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  try {
+    // ---- データ取得 ----
+    if (action === 'read') {
+      const sheet = ss.getSheetByName(params.sheet);
+      if (!sheet) return ok({ data: [] });
+      const data = sheet.getDataRange().getValues();
+      return ok({ data: data });
+    }
+
+    // ---- 行を追加 ----
+    if (action === 'append') {
+      let sheet = ss.getSheetByName(params.sheet);
+      if (!sheet) sheet = ss.insertSheet(params.sheet);
+      sheet.appendRow(params.row);
+      return ok({});
+    }
+
+    // ---- 転記済みフラグを書き戻す ----
+    if (action === 'markDone') {
+      const sheet = ss.getSheetByName(params.sheet);
+      if (!sheet) return ok({});
+      const data = sheet.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]) === String(params.id)) {
+          sheet.getRange(i + 1, 2).setValue(true);        // B列=転記済み
+          sheet.getRange(i + 1, 3).setValue(params.receiptNo); // C列=受付番号
+          break;
+        }
+      }
+      return ok({});
+    }
+
+    // ---- 接続テスト ----
+    if (action === 'ping') {
+      return ok({ message: '接続成功 - ' + ss.getName() });
+    }
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ status: 'error', message: err.toString() }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function ok(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(Object.assign({ status: 'ok' }, data)))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// GETリクエストにも対応（テスト用）
+function doGet(e) {
+  return ok({ message: 'KRT会計システム GAS稼働中' });
+}`;
+}
+
+function init() {
+  loadState();
+  renderMemberList();
+  populatePersonSelects();
+  populateBalancePersonSelect();
+  initEntryDates();
+  const balDate = document.getElementById('bal-date');
+  if (balDate) balDate.value = new Date().toISOString().split('T')[0];
+  renderLedger('expense');
+  renderLedger('club');
+  renderRefund();
+  renderBalanceTable();
+  updateRefundBadge();
+  renderDashboard();
+  renderTriageList();
+  updateTriageBadge();
+  renderNoteList();
+  populateSettingsForm();
+  initGasCodeBlock();
+  if (state.settings.gasUrl) updateGasStatusBadge(true);
+  if (!state.settings.gasUrl) {
+    const notice = document.getElementById('triage-gas-notice');
+    if (notice) notice.style.display = 'block';
+  }
+  console.log('Step 7 完了：全機能実装完了');
+}
+
+init();
+</script>
+</body>
+</html>
